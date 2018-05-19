@@ -1,0 +1,505 @@
+---
+title: "Predictive Phylogeography using Random Forest"
+author: "Anahi Espindola, Megan Ruffley, Megan Smith & Tara Pelletier"
+date: "1-June-2018"
+output:
+  html_document:
+    toc: yes
+    toc_float: yes
+    
+#    pdf_document
+---
+
+#Systematic Biology Meeting {-}
+#1. Introduction
+This exercise is designed to familiarize you with the `randomForest` package in R for predictive modeling in phylogeography and conservation. Practice data are from Pelletier et al. (*in review*). This dataset contains a list of species of land plants from North America. GPS coordinates were obtained from the Global Biodiversity Information Facility [(GBIF)](https://www.gbif.org/) and used to extract spatial and environmental data for each species.
+
+- Column headers are as follows:
+    - n.gps: the number of gps coordinates available for that species on GBIF
+    - abs_max: maximum absolute value for latitude
+    - abs_min: minimum absolute value for latitude 
+    - length_lat: length of latitude the gps coordinates extend
+    - median_lon: median longitude
+    - median_lat: median latitude
+    - area: the area of a convex ploygon drawn around all the gps coordinates (we are using this as a proxy for range size)
+    - bio1 through bio19 are the bioclimatic variables available on the [Worldclim database](http://www.worldclim.org/bioclim). m is the mean of all gps coordinates, and sd is the standard deviation.
+    - elevm: elevation mean
+    - elevsd: elevation standard deviation
+    - contitnents: list of continents in which the gps points fall
+    - dist: endemic if the species is only found in North America, global if found on at least one other continent
+    - Red.List.status: [IUCN](http://www.iucnredlist.org/) red list status, CR = critically endangered, EN = endangered, LC = least concern, NT = near threatened, VU = vulnerable
+
+Before starting install the following R packages:  
+`ggplot2` (Wickham 2009)  
+`randomForest` (Liaw & Wiener 2002)  
+`dplyr` (Wickham et al. 2017)  
+`ggraph` (Pederson 2018)  
+`igraph` (Csardi & Nepusz 2006)
+
+You can do so using the following command for each package:
+`install.packages('nameofpackage')`
+
+When you see this line of code: `library(nameofpackage)`, we are loading that package into R. You only need to install packages once (unless you update to a new version of R), but you need to load the library every time you start a new R session.
+
+Let's import the data!
+```{r}
+northamericadata <- read.table("NorthAmerica_redlist.csv", sep=",", header=T)
+```
+
+#2. Explore the data
+For example,
+```{r}
+range(northamericadata$n.gps)
+hist(log(northamericadata$area), main="Distribution of Area", 
+     xlab="log Area (km2)", ylab="Number of species in bin", breaks=50)
+```
+```{r}
+library(ggplot2)
+ggplot(data = northamericadata) +
+  geom_bar(mapping = aes(x = Red.List.status)) +
+  ggtitle("Red List Status Distribution")
+```
+
+Let us know if you want help trying to look at the data in a different way. We'll see what we can do! If you're new to R, [here](https://www.statmethods.net/index.html) and [here](https://www.r-bloggers.com/) are good places to start.
+
+#3. Build a random forest classifier
+The `randomForest` package implements Breiman's random forest algorithm (based on Breiman and Cutler's original Fortran code) for classification and regression (Breiman 2001).
+```{r message = F}
+library(randomForest)
+```
+
+Now, let's build a forest to predict IUCN status using the bioclimatic and geographic variables. We will treat IUCN Red Listing as the response variable (`Red.List.status`). In the line of code below, this is followed by the predictor variables, and the data table is defined (as `northamericadata` in this case). `ntree` is the number of decision trees in the forest.
+```{r message = F, results = "hide"}
+RF_model <- randomForest(Red.List.status ~ median_lon + median_lat + area + bio1sd + bio2sd + bio3sd + bio4sd + bio5sd + bio6sd + bio7sd + bio8sd + bio9sd + bio10sd + bio11sd + bio12sd + bio13sd + bio14sd + bio15sd + bio16sd + bio17sd + bio18sd + bio19sd + elevsd, data=northamericadata, ntree=1000)
+
+RF_model
+```
+  
+
+#4. Looking at the forest
+You can extract trees from the forest. k = which tree is being extracted. This can help us understand how the variables are being used in the model.
+```{r message=F}
+tree<-getTree(RF_model, k=1, labelVar=T)
+head(tree)
+```
+The number of rows equals the number of nodes in the tree, and the first two columns direct you to the next node.
+
+We can also plot the tree to better understand what the model is doing.
+We will use a function developed by Shirin Glander avialable [here](https://shiring.github.io/machine_learning/2017/03/16/rf_plot_ggraph). `source` is calling the R script `plottree.R`.
+
+```{r message=F, warning=F}
+library(dplyr)
+library(ggraph)
+library(igraph)
+source("plottree.R")
+tree_func(RF_model, 1)
+```
+
+Try looking at several trees.
+
+##**STOP HERE.** 
+**WE ARE GOING TO DISCUSS USING BIG DATA AND ASSESSING MODEL PERFORMANCE. IF YOU ARE AHEAD OF THE GAME, PLEASE SEE THE OTHER TUTORIAL TO EXPLORE ANOTHER DATA SET, OR EXPLORE AND FORMAT YOUR OWN DATA.**
+
+#5. Evaluating the classifier
+
+Can we accurately predict IUCN status using bioclimatic and geographic variables? Let's evaluate the predictive power of our random forest classifier. 
+
+We can look at the OOB (out-of-bag) error rates.
+```{r message = F}
+RF_model
+```
+Notice that some classes are predicted poorly, even though the overall error rate is low. Why is this the case?
+
+There are a  number of steps that we can take to evaluate why our classifier is performing poorly.
+
+## a) Can our random forest classifier be improved by changing the number of trees, or other modeling options?
+This is one of the easier issues to fix. 
+
+`ntree` changes the number of trees. The default is 500.  
+`mtry` changes the number of variables sampled as candidates per split. The default value for classification is sqrt(p) (where p is number of variables in the data set), and for regression is (p/3).  
+`nodesize` changes the size of the tree. The default value for classification is 1, and for regression is 5.  
+
+For this dataset, do these changes make a difference?
+
+We can also evaluate the effect of the number of trees in the forest by plotting the OOB error rates versus the number of trees in the forest.
+```{r message = F, results = "hide"}
+plot(RF_model)
+```
+
+If the error rates have not reached an asymptote with respect to the number of trees, add trees to your classifier.
+
+## b) Is our dataset balanced?
+
+When one of the predicted class has many more measurements than the others, then we can end up with unbalanced error rates.
+Recall the figure from the beginning of the tutorial, when we were exploring our data.
+
+```{r}
+ggplot(data = northamericadata) +
+  geom_bar(mapping = aes(x = Red.List.status)) +
+  ggtitle("Red List Status Distribution")
+```
+
+There is a clear inbalance in the dataset. Most of the training data are classified as least concern.
+
+We can further investigate imbalance by looking at which observations are misclassified.
+
+###Identifying misclassified samples
+
+The `votes=T` command will return the fraction of trees in the random forest that vote for the correct model for each observation in the training dataset.
+
+```{r message=F}
+RF_model <- randomForest(Red.List.status ~ abs_max_lat + abs_min_lat + length_lat + median_lon + median_lat + area + bio1m + bio2m + bio3m + bio4m + bio5m + bio6m + bio7m + bio8m + bio9m + bio10m + bio11m + bio12m + bio13m + bio14m + bio15m + bio16m + bio17m + bio18m + bio19m + bio1sd + bio2sd + bio3sd + bio4sd + bio5sd + bio6sd + bio7sd + bio8sd + bio9sd + bio10sd + bio11sd + bio12sd + bio13sd + bio14sd + bio15sd + bio16sd + bio17sd + bio18sd + bio19sd + elevm + elevsd, data=northamericadata, ntree=1000, votes=T)
+
+#get prediction probability for each species
+SpeciesPredicted <- RF_model$votes
+#get species names and IUCN listing from data
+SpeciesInfo <- northamericadata[c(1,51)]
+#put this info together
+SpeciesPredicted <- cbind(SpeciesPredicted, SpeciesInfo)
+
+#see what this information looks like
+head(SpeciesPredicted)
+
+#output these predictions to a file
+write.csv(SpeciesPredicted, file="RF_model_misclassified.csv", row.names=FALSE)
+
+#plot these predictions for each group.
+par(mfrow=c(3,2))
+SpeciesPredicted_LC <- SpeciesPredicted[ which(SpeciesPredicted$Red.List.status == 'LC'), ]
+SpeciesPredicted_NT <- SpeciesPredicted[ which(SpeciesPredicted$Red.List.status == 'NT'), ]
+SpeciesPredicted_VU <- SpeciesPredicted[ which(SpeciesPredicted$Red.List.status == 'VU'), ]
+SpeciesPredicted_EN <- SpeciesPredicted[ which(SpeciesPredicted$Red.List.status == 'EN'), ]
+SpeciesPredicted_CR <- SpeciesPredicted[ which(SpeciesPredicted$Red.List.status == 'CR'), ]
+SpeciesPredicted_LC <- SpeciesPredicted_LC [,1:5]
+SpeciesPredicted_NT <- SpeciesPredicted_NT [,1:5]
+SpeciesPredicted_VU <- SpeciesPredicted_VU [,1:5]
+SpeciesPredicted_EN <- SpeciesPredicted_EN [,1:5]
+SpeciesPredicted_CR <- SpeciesPredicted_CR [,1:5]
+barplot(as.matrix(SpeciesPredicted_LC), main = "LC")
+barplot(as.matrix(SpeciesPredicted_NT), main = "NT")
+barplot(as.matrix(SpeciesPredicted_VU), main = "VU")
+barplot(as.matrix(SpeciesPredicted_EN), main = "EN")
+barplot(as.matrix(SpeciesPredicted_CR), main = "CR")
+```
+
+Regardless of actual category (IUCN listing), we tend to predict most species as least concern. This suggests that the imbalance is heavily affecting our results.
+
+In other words, the error rates for CR, EN, NT, and VU are very high, and this is likely due to the uneven distribution of the classes we are trying to predict. 
+
+#6. Improving the classifier by downsampling
+
+We  can use a downsampling approach, so that we have more equal representations of the five classes. For examples of this see Espindola et al. (2016) and Pelletier & Carstens (2018).
+
+We will randomly sample 10 times based on the sample size of the minority class (if doing this for real, consider doing 100, or more, iterations). This loop outputs the error from each of the 10 reps into an R dataframe and a csv file.
+
+```{r, results="hide", warning=F}
+#get sample size for each class
+table(northamericadata$Red.List.status)
+
+#create dataframe to hold error for each iteration of the random forest model
+RF_model_error = data.frame()
+
+#loop to sample data and build the classifier 10 times
+for (i in 1:10) {
+  #sample each IUCN red list class
+  CR=northamericadata[northamericadata$Red.List.status=="CR",]
+  NT=northamericadata[northamericadata$Red.List.status=="NT",]
+  NTsamp<-NT[(sample(nrow(NT), size=7)),]
+  EN=northamericadata[northamericadata$Red.List.status=="EN",]
+  ENsamp<-EN[(sample(nrow(EN), size=7)),]
+  LC=northamericadata[northamericadata$Red.List.status=="LC",]
+  LCsamp<-LC[(sample(nrow(LC), size=7)),]
+  VU=northamericadata[northamericadata$Red.List.status=="VU",]
+  VUsamp<-VU[(sample(nrow(VU), size=7)),]
+  
+  #concatenate all classes into one dataframe
+  pred_samp=rbind(CR,NTsamp,ENsamp,LCsamp,VUsamp)
+  
+  #build the random forest model
+  RF_model <- randomForest(Red.List.status ~ abs_max_lat + abs_min_lat + length_lat + median_lon + median_lat + area + bio1m + bio2m + bio3m + bio4m + bio5m + bio6m + bio7m + bio8m + bio9m + bio10m + bio11m + bio12m + bio13m + bio14m + bio15m + bio16m + bio17m + bio18m + bio19m + bio1sd + bio2sd + bio3sd + bio4sd + bio5sd + bio6sd + bio7sd + bio8sd + bio9sd + bio10sd + bio11sd + bio12sd + bio13sd + bio14sd + bio15sd + bio16sd + bio17sd + bio18sd + bio19sd + elevm + elevsd, data=pred_samp, ntree=1000)
+  
+  #get the error rate
+  err=RF_model$err.rate
+  
+  #append error rates to dataframe
+  err_temp<-data.frame(err)
+  RF_model_error<-rbind(RF_model_error,err_temp)
+  
+}
+
+#output all error rates to a file for later (just in case)
+write.csv(RF_model_error, file="RF_model_error.csv", row.names=FALSE, col.names=FALSE)
+
+#get averaged error rates
+head(RF_model_error)
+colMeans(RF_model_error, na.rm=T)
+```
+How do the OOB error rates look now?
+
+#7. Improving the classifier by binning categories
+
+The error rates are are more evenly distributed but the error rates are high. This could be due to small sample size (7 of each category), so there may just not be enough power to make accurate predictions. We might be able to collapse some of the IUCN categories to overcome this problem. Below, we are trying to predict whether or not a species will be Least Concern.
+
+```{r, results="hide", warning=F}
+#add column and label species as LC (least consern) or NoLC (not least concern)
+NoLC<-c('CR','EN','VU')
+for (i in 1:nrow(northamericadata)) {
+  if (northamericadata$Red.List.status[i] %in% NoLC) {
+    northamericadata$rls_LC[i] <-'NoLC' 
+  }
+  else {
+    northamericadata$rls_LC[i] <-'LC'
+  }
+}
+
+#categorical variables need to be of class `factor'
+northamericadata$rls_LC<-as.factor(northamericadata$rls_LC)
+```
+
+Rebuild the random forest model using this new response variable
+```{r, results="hide", warning=F}
+RF_model <- randomForest(rls_LC ~ abs_max_lat + abs_min_lat + length_lat + median_lon + median_lat + area + bio1m + bio2m + bio3m + bio4m + bio5m + bio6m + bio7m + bio8m + bio9m + bio10m + bio11m + bio12m + bio13m + bio14m + bio15m + bio16m + bio17m + bio18m + bio19m + bio1sd + bio2sd + bio3sd + bio4sd + bio5sd + bio6sd + bio7sd + bio8sd + bio9sd + bio10sd + bio11sd + bio12sd + bio13sd + bio14sd + bio15sd + bio16sd + bio17sd + bio18sd + bio19sd + elevm + elevsd, data=northamericadata, ntree=1000)
+RF_model
+```
+
+Still not that great, so let's do the downsampling scheme again on this response variable.
+
+```{r, results="hide", warning=F}
+#create dataframe to hold error for each iteration of the random forest model
+RF_model_error = data.frame()
+
+#get sample size for each class
+table(northamericadata$rls_LC)
+
+#loop to sample data and build the classifier 10 times
+for (i in 1:10) {
+ #sample each IUCN red list class
+ NoLC=northamericadata[northamericadata$rls_LC=="NoLC",]
+ LC=northamericadata[northamericadata$rls_LC=="LC",]
+ LCsamp<-LC[(sample(nrow(LC), size=61)),]
+
+ #concatenate all classes into one dataframe
+ pred_samp=rbind(NoLC, LCsamp)
+
+ #build the random forest model
+ RF_model <- randomForest(rls_LC ~ abs_max_lat + abs_min_lat + length_lat + median_lon + median_lat + area + bio1m + bio2m + bio3m + bio4m + bio5m + bio6m + bio7m + bio8m + bio9m + bio10m + bio11m + bio12m + bio13m + bio14m + bio15m + bio16m + bio17m + bio18m + bio19m + bio1sd + bio2sd + bio3sd + bio4sd + bio5sd + bio6sd + bio7sd + bio8sd + bio9sd + bio10sd + bio11sd + bio12sd + bio13sd + bio14sd + bio15sd + bio16sd + bio17sd + bio18sd + bio19sd + elevm + elevsd, data=pred_samp, ntree=1000)
+
+ #get the error rate
+ err=RF_model$err.rate
+
+ #append error rates to dataframe
+ err_temp<-data.frame(err)
+ RF_model_error<-rbind(RF_model_error,err_temp)
+}
+
+#get averaged error rates
+head(RF_model_error)
+colMeans(RF_model_error, na.rm=T)
+```
+That's a little better - let's go with it!
+
+##**STOP HERE.** 
+**WE ARE GOING TO DISCUSS HOW TO USE THIS PREDICTIVE MODEL TO UNDERSTAND SOME OF THE BIOLOGY HAPPENING, AND TO PREDICTING UNKNOWN RESPONSES. IF YOU ARE AHEAD OF THE GAME, PLEASE SEE THE OTHER TUTORIAL TO EXPLORE ANOTHER DATA SET, OR EXPLORE AND FORMAT YOUR OWN DATA.**
+
+#8. Variable Importance
+Let's see what predictor variables are contributing the most to the model.
+
+The command `importance=TRUE` removes each variable, one at time, from the classifier and calculates how much worse the model performs when that variable is not included. We used this command in the loop above, and we stored the results for each replicate in the RF_varimp dataframe.
+
+The Mean Decrease in Accuracy (MDA) is a measure of variable importance that is calculated based on permuting the data and omitting a predictor variable. MDA is the increase in percent of times a case is OOB and misclassified when the variable is permuted. Gini impurity (GINI), on the other hand, measures variable importance based on how variables contribute to node purity In other words, if, when used, a variable results in splits that generally split between, not within, classes, then that variable increases node purity. Variables that increase node purity will have higher mean decreases in GINI.
+
+Run the model using `importance=T` command.
+```{r, results="hide", warning=F}
+
+#declare data frames to hold error rates and variable importance measures
+RF_model_error = data.frame()
+RF_varimp = data.frame()
+
+#declare training datasets for both classes
+NoLC=northamericadata[northamericadata$rls_LC=="NoLC",]
+LC=northamericadata[northamericadata$rls_LC=="LC",]
+
+#determine downsample.size by the minimum number of observations between the two class datasets
+downsample.size <- min(c(nrow(NoLC), nrow(LC)))
+
+for (i in 1:10) {
+ #sample from the larger dataset at the downsample size, or size of the smaller dataset
+ LCsamp<-LC[(sample(nrow(LC), size=downsample.size)),]
+ 
+ #create training dataset to be used in random forest function
+ pred_samp=rbind(NoLC, LCsamp)
+
+ #construct random forest object
+ RF_model <- randomForest(rls_LC ~ abs_max_lat + abs_min_lat + length_lat + median_lon + median_lat + area + bio1m + bio2m + bio3m + bio4m + bio5m + bio6m + bio7m + bio8m + bio9m + bio10m + bio11m + bio12m + bio13m + bio14m + bio15m + bio16m + bio17m + bio18m + bio19m + bio1sd + bio2sd + bio3sd + bio4sd + bio5sd + bio6sd + bio7sd + bio8sd + bio9sd + bio10sd + bio11sd + bio12sd + bio13sd + bio14sd + bio15sd + bio16sd + bio17sd + bio18sd + bio19sd + elevm + elevsd, data=pred_samp, ntree=1000, importance=T)
+
+ #extract the final estimate of OOB error rates
+ err=RF_model$err.rate[nrow(RF_model$err.rate),]
+
+ #append OOB error estimate to dataframe
+ RF_model_error<-rbind(RF_model_error, err)
+ colnames(RF_model_error) <- names(err)
+
+ #extract the importance measures 
+ imp = RF_model$importance
+ 
+ #append importance measures to dataframe
+ imp_temp <- data.frame(imp)
+ imp_temp$var <- row.names(imp_temp)
+ RF_varimp <- rbind(RF_varimp, imp_temp)
+}
+```
+
+Now that we have stored the varible importance data, we can extract the MDA for all variables from each random forest and summarize that information.
+
+```{r, results="hide", warning=F}
+#isolate all MDA estimates from all 10 random forest objects
+RF_vardata <- data.frame(RF_varimp$var, RF_varimp$MeanDecreaseAccuracy)
+
+#calculate the average MDA estimate for each of the 46 variables
+mda_means <- aggregate(.~RF_varimp.var, data = RF_vardata, FUN = mean)
+
+#Order the variable names by their average MDA estimate in decreasing order
+mda_means$RF_varimp.var <- factor(mda_means$RF_varimp.var, levels= mda_means$RF_varimp.var[order(mda_means$RF_varimp.MeanDecreaseAccuracy, decreasing = T)])
+
+#Order the average MDA estimates in decreasing order
+mda_means <- mda_means[order(mda_means$RF_varimp.MeanDecreaseAccuracy, decreasing = T),]
+
+#Now we can visualize MDA for each variable
+ggplot(mda_means, aes(x=RF_varimp.var, y = RF_varimp.MeanDecreaseAccuracy)) + geom_point() + theme(axis.text.x = element_text(angle=60, hjust=1))
+
+```
+
+We can also visualize MDA for each class, noLC and LC, seperately. Each step below is the same as above when summarizing overall MDA, only here, we are summarizing MDA for each class, LC and NoLC. 
+
+```{r, results="hide", warning=F}
+#isolate all MDA estimates from all 10 random forest objects for LC and noLC
+RF_vardata_LC <- data.frame(RF_varimp$var, RF_varimp$LC)
+RF_vardata_NoLC <- data.frame(RF_varimp$var, RF_varimp$NoLC)
+
+#calculate the average MDA estimate for each of the 46 variables
+mda_means_LC <- aggregate(.~RF_varimp.var, data = RF_vardata_LC, FUN = mean)
+mda_means_NoLC <- aggregate(.~RF_varimp.var, data = RF_vardata_NoLC, FUN = mean)
+
+#Order the variable names by their average MDA estimate in decreasing order
+mda_means_LC$RF_varimp.var <- factor(mda_means_LC$RF_varimp.var, levels= mda_means_LC$RF_varimp.var[order(mda_means_LC$RF_varimp.LC, decreasing = T)])
+mda_means_NoLC$RF_varimp.var <- factor(mda_means_NoLC$RF_varimp.var, levels= mda_means_NoLC$RF_varimp.var[order(mda_means_NoLC$RF_varimp.NoLC, decreasing = T)])
+
+#In decreasing order, sort the values of the average Mean Decrease Gini estimates
+mda_means_LC<- mda_means_LC[order(mda_means_LC$RF_varimp.LC, decreasing = T),]
+mda_means_NoLC<- mda_means_NoLC[order(mda_means_NoLC$RF_varimp.NoLC, decreasing = T),]
+
+#Now we can visualize MDA for each variable
+par(mfrow=c(1,2))
+ggplot(mda_means_LC, aes(x=RF_varimp.var, y = RF_varimp.LC)) + geom_point() +
+  theme(axis.text.x = element_text(angle=60, hjust=1))
+ggplot(mda_means_NoLC, aes(x=RF_varimp.var, y = RF_varimp.NoLC)) + geom_point() +
+  theme(axis.text.x = element_text(angle=60, hjust=1))
+  
+```
+
+Why might some variables be important for accuracy in one class, but not the other? 
+
+Finally, let's investigate Mean decrease in GINI.
+```{r, results="hide", warning=F}
+#isolate all Mean Decrease Gini estimates from all 10 random forest objects
+RF_vardata <- data.frame(RF_varimp$MeanDecreaseGini, RF_varimp$var, row.names = NULL)
+
+#calculate the average Mean Decrease Gini estimate for each of the 46 variables
+gini_means <- aggregate(.~RF_varimp.var, data = RF_vardata, FUN = mean, row.names = NULL)
+
+#In decreasing order, sort the variables by their average Mean Decrease Gini estimate
+gini_means$RF_varimp.var <- factor(gini_means$RF_varimp.var, levels= gini_means$RF_varimp.var[order(gini_means$RF_varimp.MeanDecreaseGini, decreasing = T)])
+
+#In decreasing order, sort the values of the average Mean Decrease Gini estimates
+gini_means <- gini_means[order(gini_means$RF_varimp.MeanDecreaseGini, decreasing = T),]
+
+#Plot mean dexrease in GINI 
+ggplot(gini_means, aes(x=RF_varimp.var, y = RF_varimp.MeanDecreaseGini)) + geom_point() +
+  theme(axis.text.x = element_text(angle=60, hjust=1))
+
+```
+
+Save the results of MDA and GINI for later
+```{r, results="hide", warning=F}
+#output the importance to a file
+write.csv(gini_means, file="RF_model_importance_gini.csv", row.names = T)
+write.csv(mda_means, file="RF_model_importance_mda.csv", row.names = T)
+```
+
+
+What types of variables have the most predictive power? The least? 
+Is predictive power evenly distributed, or is the model driven by one or a few predictors?
+
+Can we improve our classifier by only using the most informative predictor variables?
+
+#9. Predicting Unknown Responses
+
+We can use this model to predcit the IUCN Red List status for species that are not listed. Import the data table that has unlisted species, which includes the same predictor variables.
+```{r}
+northamericaunlisted <- read.table("NorthAmerica_unlisted.csv", sep=",", header=T)
+
+#let's get rid of any species that have missing data since the random forest algorithm will not predict these anyway
+northamericaunlisted<-na.omit(northamericaunlisted)
+```
+
+Since the donwsampling scheme using LC and NoLC as the response variable gives us the most accurate results, we will use this model. We will average the prediction across all iterations. The `type="prob"` command will give a probablily for each species belonging to each category, given this classifier.
+```{r}
+#create dataframe to hold preditction for each iteration of the random forest model
+RF_model_prediction = data.frame()
+
+for (i in 1:10) {
+  NoLC=northamericadata[northamericadata$rls_LC=="NoLC",]
+  LC=northamericadata[northamericadata$rls_LC=="LC",]
+  LCsamp<-LC[(sample(nrow(LC), size=61)),]
+  pred_samp=rbind(NoLC, LCsamp)
+  
+  RF_model <- randomForest(rls_LC ~ abs_max_lat + abs_min_lat + length_lat + median_lon + median_lat + area + bio1m + bio2m + bio3m + bio4m + bio5m + bio6m + bio7m + bio8m + bio9m + bio10m + bio11m + bio12m + bio13m + bio14m + bio15m + bio16m + bio17m + bio18m + bio19m + bio1sd + bio2sd + bio3sd + bio4sd + bio5sd + bio6sd + bio7sd + bio8sd + bio9sd + bio10sd + bio11sd + bio12sd + bio13sd + bio14sd + bio15sd + bio16sd + bio17sd + bio18sd + bio19sd + elevm + elevsd, data=pred_samp, ntree=1000)
+  
+  
+  #predict IUCN red list status for unlisted samples
+  pred <- predict(RF_model, newdata=northamericaunlisted, type="prob")
+  
+  pred_temp<-data.frame(northamericaunlisted$Species, pred)
+  RF_model_prediction<-rbind(RF_model_prediction,pred_temp)
+  
+}
+
+head(RF_model_prediction)
+
+write.csv(RF_model_prediction, file="RF_model_prediction.csv",  row.names=FALSE)
+```
+
+Change the predict command `type` from `prob` to `response` and then `votes` to see what those predictions look like.
+
+##**STOP HERE.** 
+**WE ARE GOING TO WRAP UP. PLEASE FEEL FREE TO TRY OUT THE OTHER TUTORIAL OR USE YOUR OWN DATA. IF THERE IS TIME WE CAN DISCUSS DATA IMPUTATION.**
+
+
+#10. Using RF to impute missing data
+The random forest model won't run if your data matrix contains missing data. There are several ways you can impute missing values, if you decide you do not want to throw away these samples.
+
+`na.roughfix()`
+This function replaces NAs with the median for numeric variables, and the most frequent level for factors.
+
+`rfImpute()`
+This function uses the random forest algorithm to impute missing data, by choosing a missing value that is the closest based on the response and other predictor variables. For continuous predictors, the imputed value is the weighted average of the non-missing obervations, where the weights are the proximities. For categorical predictors, the imputed value is the category with the largest average proximity.
+
+#11. References
+
+Breimen L. Random Forests. *Machine Learning* **2001**, 45, 5-32.
+
+Csardi G, Nepusz T. The igraph software package for complex network research, InterJournal, Complex Systems 1695. **2006**, http://igraph.org
+  
+Esp?ndola A, Ruffley M, Smith M, Carstens BC, Tank D, Sullivan J. 2016. Identifying cryptic diversity with predictive phylogeography. *Proceedings of the Royal Society of London B* **2016**, 283, 1841.
+
+Liaw A, Wiener M. Classification and regression by randomForest. *R News* **2002**, 2, 18-22.
+
+Thomas Lin Pedersen TL. ggraph: An Implementation of Grammar of Graphics for Graphs and Networks. R package version 1.0.1. **2018**, https://CRAN.R-project.org/package=ggraph
+
+Pelletier TA, Carstens BC. Geographic range size and latitude predict population genetic structure in a global survey. *Biology Letters* **2018**, 14, 20170566.
+
+Pelletier TA, Carstens BC, Tank D, Sullivan J, Esp?ndola A. Predicting plant conservation priorities on a global scale. *In review*.
+
+Wickham H. ggplot2: Elegant Graphics for Data Analysis. Springer-Verlag New York, **2009**.
+
+Wickham H, Francois R, Henry L, M?ller K. dplyr: A Grammar of Data Manipulation. R package version 0.7.2. **2017**, https://CRAN.R-project.org/package=dplyr
