@@ -1,0 +1,55 @@
+---
+output:
+  html_document: default
+  pdf_document: default
+---
+#Predictive Phylogeography
+##Another Exercise Dataset
+
+###Background
+
+An important area of research in biology and conservation is the development of new methods to identify the presence of cryptically diverse taxa within a system of study. In the past years, there has been a myriad of new methods developed to this end. Most of these, however, require the use of molecular data, which in many cases is just unavailable or extremely difficult to obtain. In a paper we published in 2016 (Espindola et al., 2016), we investigated the ability of Random Forests to assist in the identification of lineages that are cryptically diverse.
+
+Specifically, the study was focused on the disjunct temperate rainforests of the Pacific Northwest of North America. This ecosystem is formed by temperate rainforests, present in the coastal parts of the region of study, and the inland Northern Rocky Mountains; the two zones are isolated by the Columbia Basin desert steppes. In this ecosystem, it has been shown that many taxa harbor cryptic diversity, and that, when present, this diversity is structured across the disjunction between the coastal and inland parts of the rainforest. Based on that knowledge, in this work we explored whether or not Random Forest analyses (Breiman, 2001), in combination with climatic and taxonomic information could assist us in first classifying taxa that harbor or not cryptic diversity, and then using the classifier to predict the category of unstudied taxa. To do this, we collected georeferenced localities for each taxon that had been studied and had been shown to harbor or not cryptic diversity. Then, we associated to each taxon its higher taxonomic rank (e.g., Mollusks for snails and slugs; Amphibian for salamanders and frogs; etc.), and for each of the localities, we extracted bioclimatic variables from the worldclim dataset.
+
+We are providing this dataset for you to apply what you learned at the workshop. Specifically, we would like you to:
+
+1- Create a Random Forest analysis that will allow you to build an accurate classifier. For this, you can use whichever improvement method that you consider appropriate.
+
+2- Show what category (cryptic or non-cryptic) currently unstudied taxa are predicted to be in.
+
+
+###The data
+
+The training dataset is in the file 'PNWPredPhylData.csv'.
+The taxa we will use to build the classifier are [*Ascaphus montanus*](https://amphibiaweb.org/species/5822) and [*A. truei*](https://amphibiaweb.org/species/2049), [*Chonaphe armata*](https://calphotos.berkeley.edu/cgi/img_query?enlarge=0000+0000+0505+2279), [*Dicamptodon aterrimus*](https://amphibiaweb.org/species/3864) and [*D. tenbrosus*](https://amphibiaweb.org/cgi/amphib_query?where-genus=Dicamptodon&where-species=tenebrosus&account=amphibiaweb), [*Microtus richardsoni*](https://naturalhistory.si.edu/mna/image_info.cfm?species_id=176), [*Prophysaon coeruleum*](http://linnet.geog.ubc.ca/efauna/Atlas/Atlas.aspx?sciname=Prophysaon%20coeruleum), [*Plethodon idahoensis*](https://amphibiaweb.org/species/4136) and [*P. vandykei*](https://amphibiaweb.org/species/4156), and [*Salix melanopsis*](http://www.efloras.org/florataxon.aspx?flora_id=1&taxon_id=242445785). (Click on the names to see what they look like, and get some more information on each of the taxa).
+
+The data for taxa to predict is in the file 'PredictDataFull.csv'. The taxa we will predict on will be [*Alnus rubra*](http://www.nwplants.com/business/catalog/aln_rub.html), [*Haplotrema vancouverense*](http://fieldguide.mt.gov/speciesDetail.aspx?elcode=IMGAS36120), [*Prophysaon andersoni*](http://idtools.org/id/mollusc/factsheet.php?name=Prophysaon%20andersonii), [*P. dubium*](https://www.inaturalist.org/taxa/228799-Prophysaon-dubium), [*P.vanattae*](https://www.inaturalist.org/taxa/228804-Prophysaon-vanattae)/ [*P.humile*](http://fieldguide.mt.gov/speciesDetail.aspx?elcode=IMGAS62070). (Click on the names to see what they look like, and get some more information on each of the taxa).
+
+
+####What's in the file?
+
+* Species: Species name
+* x , y: geographic coordinates
+* bio1_1: Annual Mean Temperature
+* bio4_1: Temperature Seasonality (standard deviation *100)
+* bio5_1: Max Temperature of Warmest Month
+* bio6_1: Min Temperature of Coldest Month
+* bio7_1: Temperature Annual Range (BIO5-BIO6)
+* bio12_1: Annual Precipitation
+* bio15_1: Precipitation Seasonality (Coefficient of Variation)
+* bio17_1: Precipitation of Driest Quarter
+* taxon: this is the taxonomic rank of the species
+* group: whether a species is recognized as Cryptic (C) or Non-Cryptic (NC), based on previous molecular studies.
+* complex: Because the species that are cryptic belong to a species complex (that now is formed by the new cryptic species), this column represents the name of the complex, if present.
+* dispStage: dispersal stage. This indicates at what developmental stage dispersal occurs. Options are 'adult', 'juvenile', and 'embryo'.
+* selfOut: Whether the species reproduces mainly by 'selfing', 'outcrossing', or both ('out/self').
+* dispersion: Means of disperal. Options are 'wind', 'wind/water', and 'self'.
+* tropicLevel: Indicates the tropic level of the species. Options are 'primary', 'herbivore', 'predator', and 'detritivore'.
+* maxSize: maximum size of the organism. In cm.
+
+###References
+Breiman L. Random Forests. Machine Learning 2001, 45, 5-32.
+
+Espindola A, Ruffley M, Smith M, Carstens BC, Tank D, Sullivan J. 2016. Identifying cryptic diversity with predictive phylogeography. Proceedings of the Royal Society of London B 2016, 283, 1841.
+
